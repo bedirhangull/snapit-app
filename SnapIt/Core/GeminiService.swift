@@ -282,8 +282,25 @@ Keep it concise and actionable.
     }
 
     private static func extractText(from json: [String: Any]) throws -> String {
-        guard let candidates = json["candidates"] as? [[String: Any]],
-              let first = candidates.first,
+        if let error = json["error"] as? [String: Any],
+           let msg = error["message"] as? String {
+            throw GeminiError.badHTTP(400, msg)
+        }
+
+        if let promptFeedback = json["promptFeedback"] as? [String: Any],
+           let blockReason = promptFeedback["blockReason"] as? String {
+            throw GeminiError.badHTTP(400, "Blocked: \(blockReason)")
+        }
+
+        guard let candidates = json["candidates"] as? [[String: Any]], !candidates.isEmpty else {
+            let snippet = String(describing: json).prefix(900)
+            throw GeminiError.badHTTP(
+                422,
+                "No candidates returned from Gemini (often safety/settings). Raw (truncated): \(snippet)"
+            )
+        }
+
+        guard let first = candidates.first,
               let content = first["content"] as? [String: Any],
               let parts = content["parts"] as? [[String: Any]] else {
             throw GeminiError.decoding

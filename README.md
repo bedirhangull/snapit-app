@@ -18,9 +18,11 @@ macOS menu-bar companion that drops a **Dynamic Island**–style panel from the 
 
 Without this variable the app runs, but AI features show an error until a key is set.
 
+**Video (Veo)** uses long‑running operations on the Gemini API. Access varies by account/billing and model availability—if generation fails, check Google AI Studio quotas and try again.
+
 ## Usage
 
-- **Control + Shift + S**: toggle the island.
+- **Control + Shift + S**: toggle the island (requires Accessibility permission for global shortcuts).
 - Click the notch area to open when closed.
 - Choose a **body photo** once (shirt/pants framing); it is stored locally for try-on prompts.
 - When the island opens, Snap It grabs a **screenshot** of the selected display and asks Gemini what clothing is visible.

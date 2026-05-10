@@ -20,6 +20,16 @@ final class ShoppingSession: ObservableObject {
     func handleIslandOpened(viewModel _: NotchViewModel) {
         videoURL = nil
 
+        guard !GeminiConfig.apiKey.isEmpty else {
+            captureImage = nil
+            captureJPEG = nil
+            resetTranscript()
+            appendAssistant(
+                "Set GEMINI_API_KEY in Xcode → Product → Scheme → Edit Scheme → Run → Environment Variables, then reopen the island."
+            )
+            return
+        }
+
         guard let screen = ScreenSelector.shared.selectedScreen else {
             resetTranscript()
             appendAssistant("No display found to capture.")
