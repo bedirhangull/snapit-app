@@ -44,6 +44,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         openItem.target = self
         menu.addItem(openItem)
 
+        let bodyItem = NSMenuItem(title: "Choose Body Photo…", action: #selector(chooseBodyPhoto), keyEquivalent: "b")
+        bodyItem.target = self
+        menu.addItem(bodyItem)
+
         menu.addItem(NSMenuItem.separator())
 
         let quitItem = NSMenuItem(title: "Quit Snap It", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
@@ -55,5 +59,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func openIsland() {
         windowController?.viewModel.notchOpen(reason: .passive)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc private func chooseBodyPhoto() {
+        BodyPhotoManager.shared.pickFromDisk()
     }
 }
