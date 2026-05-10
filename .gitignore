@@ -1,0 +1,31 @@
+# Xcode
+build/
+DerivedData/
+.derivedData/
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+
+xcuserdata/
+
+# Swift Package Manager
+.build/
+Packages/
+*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+
+Pods/
+
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+*.swp
+*.swo
+*~
+
+.idea/
+*.iml
+.vscode/
+
+releases/
