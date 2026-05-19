@@ -8,111 +8,79 @@ import SwiftUI
 struct ShoppingChatView: View {
     @ObservedObject var viewModel: NotchViewModel
     @ObservedObject var session: ShoppingSession
-    @ObservedObject private var bodyPhotos = BodyPhotoManager.shared
 
     @State private var draft: String = ""
+    @State private var showCartSheet: Bool = false
     @FocusState private var isComposerFocused: Bool
 
     private let brand = Color(red: 0.678, green: 1.0, blue: 0.008)
 
     var body: some View {
-        VStack(spacing: 0) {
-            capturePreview
-
-            Divider()
-                .overlay(Color.white.opacity(0.08))
-
-            transcript
-
-            composer
-        }
-        .padding(.horizontal, 10)
-        .padding(.bottom, 10)
-    }
-
-    private var capturePreview: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Group {
-                if let img = session.captureImage {
-                    Image(nsImage: img)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    placeholderTile(title: "Screen capture")
-                }
-            }
-            .frame(width: 118, height: 74)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.white.opacity(0.10), lineWidth: 1)
-            )
-
-            Group {
-                if let body = bodyPhotos.image {
-                    Image(nsImage: body)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    placeholderTile(title: "Body photo")
-                }
-            }
-            .frame(width: 118, height: 74)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.white.opacity(0.10), lineWidth: 1)
-            )
-
-            Spacer(minLength: 0)
-
-            VStack(alignment: .trailing, spacing: 8) {
-                Button {
-                    BodyPhotoManager.shared.pickFromDisk()
-                } label: {
-                    Label("Body photo", systemImage: "person.crop.square")
-                        .font(.system(size: 12, weight: .semibold))
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(Color.white.opacity(0.14))
-                .foregroundStyle(Color.white)
-
-                Button {
-                    session.generateTryOnClip()
-                } label: {
-                    Label("Try‑on video", systemImage: "film")
-                        .font(.system(size: 12, weight: .semibold))
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(brand.opacity(0.35))
-                .foregroundStyle(Color.black)
-                .disabled(session.isBusy || session.captureJPEG == nil || bodyPhotos.image == nil)
-            }
-        }
-        .padding(.top, 10)
-        .padding(.bottom, 8)
-    }
-
-    private func placeholderTile(title: String) -> some View {
         ZStack {
-            Color.white.opacity(0.06)
-            VStack(spacing: 4) {
-                Image(systemName: "photo")
-                    .foregroundStyle(.white.opacity(0.35))
-                Text(title)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.35))
+            VStack(spacing: 0) {
+                ZStack {
+                    transcript
+                    if session.isBusy, session.turns.isEmpty {
+                        loadingOverlay
+                    }
+                }
+                if session.canCreateCombo || session.comboImage != nil {
+                    comboBar
+                }
+                composer
+            }
+            .padding(.horizontal, 10)
+            .padding(.bottom, 10)
+
+            if showCartSheet {
+                CartSheet(
+                    session: session,
+                    onCreateCombo: {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                            showCartSheet = false
+                        }
+                        session.createCombo()
+                    },
+                    onBuyAll: {
+                        session.openAllSelectedProducts()
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                            showCartSheet = false
+                        }
+                    },
+                    onCancel: {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                            showCartSheet = false
+                        }
+                    }
+                )
+                .zIndex(10)
             }
         }
+        .animation(.spring(response: 0.42, dampingFraction: 0.82), value: showCartSheet)
+    }
+
+    private var loadingOverlay: some View {
+        VStack(spacing: 10) {
+            ProgressView()
+                .scaleEffect(1.3)
+                .progressViewStyle(.circular)
+            Text(session.loadingStatus ?? "Snapping it…")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.55))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var transcript: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 10) {
-                    if let url = session.videoURL {
-                        VideoPreviewView(url: url)
-                            .padding(.vertical, 4)
+                    if session.turns.isEmpty, !session.isBusy {
+                        Text("Press ⌃⇧S on any product page — I'll find better deals and outfit ideas.")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Color.white.opacity(0.42))
+                            .multilineTextAlignment(.leading)
+                            .padding(.top, 8)
                     }
 
                     ForEach(session.turns) { turn in
@@ -120,12 +88,31 @@ struct ShoppingChatView: View {
                             .id(turn.id)
                     }
 
-                    if session.isBusy {
+                    if !session.productSections.isEmpty {
+                        ForEach(session.productSections) { section in
+                            ProductCarouselView(section: section, session: session)
+                                .padding(.vertical, 4)
+                        }
+                    }
+
+                    if let image = session.comboImage {
+                        comboImageBubble(image)
+                            .id("combo-image")
+                    }
+
+                    if let err = session.comboError {
+                        Text(err)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Color.red.opacity(0.85))
+                            .padding(.vertical, 4)
+                    }
+
+                    if session.isBusy, !session.turns.isEmpty {
                         HStack(spacing: 8) {
                             ProgressView()
                                 .scaleEffect(0.85)
-                            Text("Thinking…")
-                                .foregroundStyle(.white.opacity(0.45))
+                            Text(session.loadingStatus ?? "Thinking…")
+                                .foregroundStyle(.white.opacity(0.55))
                                 .font(.system(size: 12, weight: .medium))
                             Spacer()
                         }
@@ -146,9 +133,174 @@ struct ShoppingChatView: View {
                     proxy.scrollTo("bottom", anchor: .bottom)
                 }
             }
+            .onChange(of: session.productSections.count) { _, _ in
+                withAnimation(.easeOut(duration: 0.2)) {
+                    proxy.scrollTo("bottom", anchor: .bottom)
+                }
+            }
+            .onChange(of: session.comboImage) { _, newValue in
+                guard newValue != nil else { return }
+                withAnimation(.easeOut(duration: 0.25)) {
+                    proxy.scrollTo("combo-image", anchor: .center)
+                }
+            }
         }
         .frame(maxHeight: .infinity)
     }
+
+    private func comboImageBubble(_ image: NSImage) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(brand)
+                Text("Your combo")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.9))
+                Spacer(minLength: 0)
+                Button {
+                    session.dismissCombo()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color.white.opacity(0.45))
+                }
+                .buttonStyle(.plain)
+            }
+
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        }
+        .padding(.vertical, 6)
+    }
+
+    private var comboBar: some View {
+        HStack(spacing: 10) {
+            let count = session.selectedProductIDs.count
+            let hasCombo = session.comboImage != nil
+
+            Button {
+                guard count > 0 else { return }
+                withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
+                    showCartSheet = true
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "bag.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(brand)
+                    Text(count > 0 ? "Cart · \(count) item\(count == 1 ? "" : "s")" : "Combo ready")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.85))
+                    if count > 0 {
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(Color.white.opacity(0.45))
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule().fill(count > 0 ? Color.white.opacity(0.06) : Color.clear)
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(count == 0)
+
+            Spacer(minLength: 6)
+
+            if count > 0 {
+                Button {
+                    session.clearSelection()
+                } label: {
+                    Text("Clear")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.6))
+                }
+                .buttonStyle(.plain)
+                .disabled(session.isBusy)
+            }
+
+            if hasCombo {
+                buyAllButton
+            } else {
+                createComboButton
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.white.opacity(0.05))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        )
+        .padding(.top, 4)
+    }
+
+    private var createComboButton: some View {
+        Button {
+            session.createCombo()
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 11, weight: .bold))
+                Text("Create combo")
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(
+                Capsule().fill(session.canCreateCombo ? brand : Color.white.opacity(0.12))
+            )
+            .foregroundStyle(session.canCreateCombo ? Color.black : Color.white.opacity(0.4))
+        }
+        .buttonStyle(.plain)
+        .disabled(!session.canCreateCombo)
+    }
+
+    private var buyAllButton: some View {
+        let canBuy = session.hasBuyableLinks && !session.isBusy
+        let total = session.selectedTotalApprox
+        let totalText = total > 0
+            ? String(format: "~$%.0f", total)
+            : ""
+        let label = totalText.isEmpty
+            ? "Buy all"
+            : "Buy all · \(totalText)"
+
+        return Button {
+            guard canBuy else { return }
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
+                showCartSheet = true
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "bag.fill")
+                    .font(.system(size: 11, weight: .bold))
+                Text(label)
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(
+                Capsule().fill(canBuy ? brand : Color.white.opacity(0.12))
+            )
+            .foregroundStyle(canBuy ? Color.black : Color.white.opacity(0.4))
+        }
+        .buttonStyle(.plain)
+        .disabled(!canBuy)
+    }
+
 
     private func bubble(for turn: ChatTurn) -> some View {
         let isUser = turn.role == .user
@@ -170,9 +322,15 @@ struct ShoppingChatView: View {
         }
     }
 
+    private var composerPlaceholder: String {
+        session.turns.isEmpty
+            ? "What are you shopping for? (e.g. \"I want to start running\")"
+            : "Ask about sizing, styling, or alternatives…"
+    }
+
     private var composer: some View {
         HStack(spacing: 10) {
-            TextField("Ask about sizing, styling, or say “show me wearing this”…", text: $draft, axis: .vertical)
+            TextField(composerPlaceholder, text: $draft, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .foregroundStyle(Color.white.opacity(0.92))

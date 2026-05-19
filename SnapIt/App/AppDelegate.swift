@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var windowManager: WindowManager?
     private var screenObserver: ScreenObserver?
+    private var screenRebuildWorkItem: DispatchWorkItem?
     private var statusItem: NSStatusItem?
 
     var windowController: NotchWindowController? {
@@ -25,7 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = windowManager?.setupNotchWindow()
 
         screenObserver = ScreenObserver { [weak self] in
-            _ = self?.windowManager?.setupNotchWindow()
+            self?.debouncedRebuildNotchWindow()
         }
 
         setupMenuBar()
@@ -44,10 +45,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         openItem.target = self
         menu.addItem(openItem)
 
-        let bodyItem = NSMenuItem(title: "Choose Body Photo…", action: #selector(chooseBodyPhoto), keyEquivalent: "b")
-        bodyItem.target = self
-        menu.addItem(bodyItem)
-
         menu.addItem(NSMenuItem.separator())
 
         let quitItem = NSMenuItem(title: "Quit Snap It", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
@@ -56,12 +53,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem?.menu = menu
     }
 
+    /// `didChangeScreenParametersNotification` can fire in bursts (layout, GPU, screen capture).
+    /// Debouncing avoids tearing down the notch window repeatedly — which felt like “infinite” refreshes and burned API quota.
+    private func debouncedRebuildNotchWindow() {
+        screenRebuildWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            _ = self?.windowManager?.setupNotchWindow()
+        }
+        screenRebuildWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
+    }
+
     @objc private func openIsland() {
         windowController?.viewModel.notchOpen(reason: .passive)
         NSApp.activate(ignoringOtherApps: true)
-    }
-
-    @objc private func chooseBodyPhoto() {
-        BodyPhotoManager.shared.pickFromDisk()
     }
 }

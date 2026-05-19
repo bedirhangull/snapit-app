@@ -48,7 +48,8 @@ struct NotchView: View {
         ZStack(alignment: .top) {
             VStack(spacing: 0) {
                 notchLayout
-                    .frame(maxWidth: viewModel.status == .opened ? notchSize.width : nil, alignment: .top)
+                    // Always cap width to the island size (closed = physical notch width). Never stretch to full screen.
+                    .frame(width: notchSize.width, alignment: .topLeading)
                     .padding(
                         .horizontal,
                         viewModel.status == .opened ? cornerOpened.top : cornerClosed.bottom
@@ -66,7 +67,7 @@ struct NotchView: View {
                     }
                     .shadow(color: viewModel.status == .opened ? .black.opacity(0.7) : .clear, radius: 6)
                     .frame(
-                        maxWidth: viewModel.status == .opened ? notchSize.width : nil,
+                        maxWidth: viewModel.status == .opened ? notchSize.width + (cornerOpened.top + 12) * 2 : nil,
                         maxHeight: viewModel.status == .opened ? notchSize.height : nil,
                         alignment: .top
                     )
@@ -80,6 +81,7 @@ struct NotchView: View {
                     }
             }
         }
+        // Center horizontally like ProdBridge: island sits above the menu bar, not a full-width bar.
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .preferredColorScheme(.dark)
         .onAppear {
@@ -92,10 +94,28 @@ struct NotchView: View {
         }
     }
 
+    @ViewBuilder
+    private func islandMark(size: CGFloat) -> some View {
+        Image(systemName: "tshirt.fill")
+            .font(.system(size: size, weight: .semibold))
+            .foregroundStyle(brandColor)
+            .accessibilityLabel("Snap It")
+    }
+
+    @ViewBuilder
+    private func activeIslandMark(size: CGFloat) -> some View {
+        ZStack {
+            if shoppingSession.isBusy {
+                PulseHalo(color: brandColor, baseSize: size * 2.6)
+            }
+            islandMark(size: size)
+        }
+        .frame(width: size * 1.4, height: size * 1.4)
+    }
+
     private var notchLayout: some View {
         VStack(alignment: .leading, spacing: 0) {
             headerRow
-                .frame(height: max(24, closedNotchSize.height))
 
             if viewModel.status == .opened {
                 ShoppingChatView(viewModel: viewModel, session: shoppingSession)
@@ -111,22 +131,74 @@ struct NotchView: View {
     }
 
     private var headerRow: some View {
-        HStack(spacing: 10) {
-            Circle()
-                .fill(brandColor)
-                .frame(width: 10, height: 10)
+        Group {
+            if viewModel.status == .opened {
+                HStack(spacing: 10) {
+                    activeIslandMark(size: 15)
 
-            Text("Snap It")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.92))
+                    Text("Snap It")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.92))
 
-            Spacer()
+                    if shoppingSession.isBusy {
+                        Text(shoppingSession.loadingStatus ?? "Thinking…")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(brandColor.opacity(0.9))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
 
-            Text("⌃⇧S")
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .foregroundStyle(Color.white.opacity(0.35))
+                    Spacer(minLength: 0)
+
+                    Text("⌃⇧S")
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(Color.white.opacity(0.35))
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+            } else {
+                // Closed: compact pill — no Spacer() filling the screen width (that caused the full-width black bar).
+                HStack(spacing: 8) {
+                    activeIslandMark(size: 13)
+
+                    Text(closedPillText)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(shoppingSession.isBusy ? brandColor : Color.white.opacity(0.9))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .minimumScaleFactor(0.7)
+                }
+                .padding(.horizontal, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 6)
+        .frame(height: max(24, closedNotchSize.height))
+    }
+
+    private var closedPillText: String {
+        if shoppingSession.isBusy, let status = shoppingSession.loadingStatus, !status.isEmpty {
+            return status
+        }
+        return "Snap It"
+    }
+}
+
+private struct PulseHalo: View {
+    let color: Color
+    let baseSize: CGFloat
+    @State private var animating = false
+
+    var body: some View {
+        Circle()
+            .fill(color.opacity(0.55))
+            .frame(width: baseSize, height: baseSize)
+            .blur(radius: 5)
+            .scaleEffect(animating ? 1.25 : 0.7)
+            .opacity(animating ? 0.85 : 0.25)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.85).repeatForever(autoreverses: true)) {
+                    animating = true
+                }
+            }
     }
 }
