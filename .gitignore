@@ -27,5 +27,6 @@ Pods/
 .idea/
 *.iml
 .vscode/
+.claude/
 
 releases/
