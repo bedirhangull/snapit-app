@@ -64,8 +64,10 @@ final class GlobalShortcutManager {
     private func toggleIsland() {
         guard let viewModel else { return }
         if viewModel.status == .opened {
+            ShortcutFeedback.playIslandClose()
             viewModel.notchClose()
         } else {
+            ShortcutFeedback.playIslandOpen()
             viewModel.notchOpen(reason: .shortcut)
         }
     }
