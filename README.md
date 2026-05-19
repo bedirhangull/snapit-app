@@ -2,6 +2,8 @@
 
 macOS menu-bar companion that drops a **Dynamic Island**–style panel from the notch. Capture what is on screen, chat about clothing with **Google Gemini**, and request try-on style videos.
 
+**Landing page:** <https://various-department-527207.framer.app/>
+
 ## Requirements
 
 - macOS 14 (Sonoma) or later
